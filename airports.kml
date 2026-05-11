@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+<Document>
+<Style id="schengen">
+        <IconStyle>
+            <color>ff00ff00</color>
+        </IconStyle>
+    </Style>
+<Style id="noschengen">
+        <IconStyle>
+            <color>ff0000ff</color>
+        </IconStyle>
+    </Style>
+<Placemark>
+  <name>LEBL</name>
+  <styleUrl>#schengen</styleUrl>
+  <Point>
+    <coordinates>2.0783333333333336,41.29694444444444,0</coordinates>
+  </Point>
+</Placemark>
+</Document>
+</kml>
