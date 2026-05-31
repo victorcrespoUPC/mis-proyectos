@@ -66,7 +66,8 @@ def SetSchengen(airport):
 
 def Printairport(airport):
     # We simply print the object data
-    print(f"Code: {airport.code} | Latitude: {airport.latitude} | Longitude: {airport.longitude} | Schengen: {airport.Schengen}")
+    print(
+        f"Code: {airport.code} | Latitude: {airport.latitude} | Longitude: {airport.longitude} | Schengen: {airport.Schengen}")
 
 def _parse_coordinate(coord_str):
     # Let's take the letter (N, S, E, W)

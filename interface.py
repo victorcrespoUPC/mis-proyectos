@@ -114,7 +114,7 @@ def update_listbox():
 
         i = i + 1
 
-flights = []
+flights = [] #LISTA CON LOS ATRIBUTOS DE TIME y ID flight.time, flight.aircraft_id
 
 def load_arrivals_ui():
     global flights
@@ -150,8 +150,8 @@ def reload_arrivals_ui():
         else:
             messagebox.showerror("Error", "No valid flights found in file.")
 
-bcn_airport = None #None by default, it gets "filled" when the user clicks LEBL structure
-
+bcn_airport = None
+flights=[]
 
 def load_lebl_structure():
     global bcn_airport
@@ -164,30 +164,58 @@ def load_lebl_structure():
 
 
 def assign_gates_to_flights():
+    global bcn_airport
     if not bcn_airport:
-        messagebox.showerror("Error", "First you have to load the LEBL structure.")
+        messagebox.showerror("Error", "First load the LEBL structure.")
         return
     if not flights:
-        messagebox.showerror("Error", "There are no flights loaded in Version 2.")
+        messagebox.showerror("Error", "No flights loaded.")
         return
+
+    import datetime
+    now = datetime.datetime.now()
+    current_minutes = now.hour * 60 + now.minute
+
+    # Reset all gates
+    for terminal in bcn_airport.terminals:
+        for area in terminal.boarding_areas:
+            for gate in area.gates:
+                gate.occupied = False
+                gate.aircraft_id = None
 
     assigned_count = 0
     for flight in flights:
-        # We look for the origin airport object to know if it is Schengen
-        origin_ap = FindAirport(all_airports, flight.origin)
-        is_schengen = origin_ap.Schengen if origin_ap else False
+        try:
+            h, m = flight.time.split(':')
+            flight_minutes = int(h) * 60 + int(m)
+        except:
+            continue
 
-        # We try to assign the door
-        res = AssignGate(bcn_airport, flight, is_schengen)
-        if res == 0:
-            assigned_count += 1
+        # Only flights that arrived in the last 90 minutes AND haven't left yet
+        if current_minutes - 90 <= flight_minutes <= current_minutes:
+            origin_ap = FindAirport(all_airports, flight.origin)
+            is_schengen = origin_ap.Schengen if origin_ap else False
+            if AssignGate(bcn_airport, flight, is_schengen) == 0:
+                assigned_count += 1
+    total_gates = 0
+    free_gates = 0
+    for terminal in bcn_airport.terminals:
+        for area in terminal.boarding_areas:
+            for gate in area.gates:
+                total_gates += 1
+                if not gate.occupied:
+                    free_gates += 1
 
-    messagebox.showinfo("Assignació", f"Doors have been assigned to {assigned_count} flights.")
-    show_occupancy_ui()
-
+    messagebox.showinfo("Assignment",
+                        f"Active flights at {now.strftime('%H:%M')}: {assigned_count}\n"
+                        f"Occupied gates: {total_gates - free_gates}\n"
+                        f"Free gates: {free_gates}\n"
+                        f"Total gates: {total_gates}")
+    print(f"Flights: {len(flights)}, assigned: {assigned_count}")
 
 def show_occupancy_ui():
-    if not bcn_airport: return
+    if not bcn_airport:
+        return
 
     # Let's create a new window to show the status
     top = tk.Toplevel(root)
@@ -199,62 +227,66 @@ def show_occupancy_ui():
     txt.insert(tk.END, f"{'DOOR':<15} | {'STATE':<10} | {'AIRCRAFT':<10}\n")
     txt.insert(tk.END, "-" * 40 + "\n")
 
-    for gate, status, ac_id in occupancy:
+    for entry in occupancy:
+        gate = entry["gate_name"]
+        status = entry["status"]
+        ac_id = entry["aircraft_id"]
         line = f"{gate:<15} | {status:<10} | {str(ac_id):<10}\n"
         txt.insert(tk.END, line)
 
-def show_free_gates_ui():
-    if not bcn_airport: return
+    PlotGateOccupancy(bcn_airport)
 
-    top = tk.Toplevel(root)
-    top.title("Free Gates - LEBL")
-    txt = scrolledtext.ScrolledText(top,width=60,height=20)
-    txt.pack()
-    free=CountFreeGates(bcn_airport)
-
-    i=0
-    while i<len(free):
-        terminal_name,free_count = free[i]
-        line = f"{terminal_name}, {free_count} free gates"
-        txt.insert(tk.END,line)
-        i+=1
-def show_find_aircraft_ui():
-    if not bcn_airport: return messagebox.showerror("Not valid ","Set airport structure first!")
-    aircraft_id=entry_aircraft.get().strip().upper()
-    if not aircraft_id:
-        messagebox.showerror("Error","Enter a valid aircraft ID")
+#def show_plot_occupancy_states_ui():
+  #  if not bcn_airport:
+     #   return
+  #  top=tk.Toplevel(root)
+  #  top.title("--Occupancy States--")
+    #txt=scrolledtext.ScrolledText(top,width=60,height=20) #no lo necesita porque solo muestra plot, no textg
+   # txt.pack()
+    #occupstate=GetOccupancyStats(bcn_airport) #la variable se llama asi SE CAMBIA!!!!!!!!
+#ES ASI:
+def show_plot_occupancy_ui():
+    if not bcn_airport:
+        messagebox.showerror("ERROR","Load LEBL structure first!")
         return
-    result=FindAircraft(bcn_airport,aircraft_id)
-    if result is None:
-        messagebox.showerror("Not found",f"Aircraft ID {aircraft_id} was not found")
+    PlotOccupancyStats(bcn_airport)
+
+
+def show_Get_Gates_By_Airline_ui():
+
+
+    if not bcn_airport:
+        messagebox.showerror("ERROR","Load LEBL structure first!")
+        return
+    airline=entry_airline.get().strip().upper()
+    if not airline:
+        messagebox.showerror("Error","Airline or callsign not found")
+        return
+    result = GetGatesbyAirline(bcn_airport,airline)
+    if len(result)==0:
+        messagebox.showerror("Sorry!","Did not find anything")
+        return
     else:
-        terminal,area,gate=result
-        messagebox.showinfo("Found", f"{aircraft_id} is at terminal {terminal}, at area {area} in gate {gate}")
 
-def show_Get_Terminal_Flights_ui():
-    if not bcn_airport:return messagebox.showerror("Not valid ","Set airport structure first!")
-    terminal_name=entry_terminal.get().strip().upper()
-    if not terminal_name:
-        txt = scrolledtext.ScrolledText("Error","Terminal not found")
+        #airline,gate=result #HAY QUE DESEMPAQUETAR CON WHILE recibo tuplas en el orden del vector result: aerolinea terminal area gate
+        i=0
+        while i<len(result):
+            terminal,area,gate_name,aircraft_id=result[i]
+            txt.insert(tk.END,f"{gate_name} {aircraft_id}\n")
+            i+=1
+
+def show_plot_hours():
+    if not bcn_airport:
+        messagebox.showerror("Load it pal!")
         return
-    result=GetTerminalFlights(bcn_airport,terminal_name)
-    if result is None:
-        messagebox.showerror("Error", "Enter a valid terminal")
-        return
-
-    top = tk.Toplevel(root)
-    top.title(f"Flights in {terminal_name}")
-    txt = scrolledtext.ScrolledText(top, width=60, height=20)
-    txt.pack()
-
-    i=0
-    while i<len(result):  #No need to express it the other way
-        gate_name,aircraft_id=result[i]
-        txt.insert(tk.END,f"{gate_name} {aircraft_id}")
+    PlotFlightsByHour(bcn_airport,flights)
 
 
 
-#Main display, this is all the button customization:
+
+
+
+#Main display:
 root = tk.Tk()
 root.title("Airport Management")
 root.geometry("1000x800") #Interface modified to display al options
@@ -319,20 +351,18 @@ tk.Button(frame_v3, text="Assign gates", width=25,
 
 tk.Button(frame_v3, text="Show gate occupancy", width=25,
           command=show_occupancy_ui).grid(row=0, column=2, padx=5)
+tk.Button(frame_v3, text ="show plot", width= 25,
+          command= show_plot_occupancy_ui).grid(row=0,column=3,padx=5)
 
-tk.Button(frame_v3, text="Show free gates",
-          command = show_free_gates_ui).grid(row=0,column=3)
+tk.Button(frame_v3, text="Gates occupied by airline").grid(row=0,column=7,sticky="w")
+entry_airline=tk.Entry(frame_v3,width=15)
+entry_airline.grid(row=1,column=0,padx=5)   #SEPARAMOS EN 2 PORQUE SI NO FALLA
+tk.Button(frame_v3,text="Find the gates now",
+          command=show_Get_Gates_By_Airline_ui).grid(row=0,column=6)
 
-tk.Label(frame_add, text="Aircradt ID:").grid(row=0, column=3, sticky="w")
-entry_aircraft = tk.Entry(frame_v3, width=15)
-entry_aircraft.grid(row=1, column=0, padx=5)
-tk.Button(frame_v3, text="Find my gate",
-          command =show_find_aircraft_ui).grid(row=0,column=4)
-
-tk.Label(frame_add, text="Flights on your terminal:").grid(row=0, column=3, sticky="w")
-entry_terminal = tk.Entry(frame_v3, width=15)
-entry_terminal.grid(row=2, column=0, padx=5)
-tk.Button(frame_v3, text="Find the flights for my terminal",
-          command =show_Get_Terminal_Flights_ui).grid(row=0,column=4)
+tk.Button(frame_v3,text="Show plotty", width=15,
+          command=show_plot_hours).grid(row=2, column=0,padx=5)
 
 root.mainloop()
+
+
